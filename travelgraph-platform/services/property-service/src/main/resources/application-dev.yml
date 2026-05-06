@@ -1,0 +1,11 @@
+graphql:
+  graphiql:
+    enabled: true
+  introspection:
+    enabled: true
+
+logging:
+  level:
+    com.travelgraph: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE

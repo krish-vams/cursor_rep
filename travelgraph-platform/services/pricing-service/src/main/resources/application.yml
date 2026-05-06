@@ -1,0 +1,57 @@
+spring:
+  application:
+    name: pricing-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:travelgraph}?currentSchema=pricing_schema
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: pricing_schema
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    schemas: pricing_schema
+    default-schema: pricing_schema
+    locations: classpath:db/migration
+
+server:
+  port: 8082
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+graphql:
+  packages:
+    - "com.travelgraph.pricing.graphql"
+  endpoint: "graphql"
+  graphiql:
+    enabled: false
+  introspection:
+    enabled: false
+
+logging:
+  level:
+    root: INFO
+    com.travelgraph: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [${spring.application.name:},%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
