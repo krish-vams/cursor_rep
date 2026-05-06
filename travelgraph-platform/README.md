@@ -1,6 +1,6 @@
 # TravelGraph Platform
 
-A federated GraphQL platform for travel services — a Rust-based federated router fronting Kotlin subgraphs (Property, Pricing, Booking, User, Review) using **Apollo Federation v2**, with schema governance (registry, breaking-change checks, linter, field-usage analytics), full observability (OpenTelemetry + Prometheus + Grafana + Jaeger), persisted queries, JWT auth, Redis response caching, GitHub Actions CI/CD, and Kubernetes deployment manifests. The focus is the **platform layer** — how multiple teams safely evolve schemas, how the router protects performance, and how failures are isolated — not a booking app.
+A GraphQL platform for travel services — a Rust-based gateway router fronting Kotlin subgraphs (Property, Pricing, Booking, User, Review), evolving toward **Apollo Federation v2**, plus schema governance (registry, breaking-change checks, linter, field-usage analytics), OpenTelemetry observability, persisted queries, JWT auth, Redis caching, CI/CD, and Kubernetes manifests. The focus is the **platform layer** — how multiple teams safely evolve schemas and isolate failures — not a booking app.
 
 ## Architecture diagram
 
@@ -130,7 +130,35 @@ Federation (`@key`, `_entities`, supergraph composition) is **not** enabled in P
 arrives in Phase 3. Per `Context.md` the Phase 1 schemas are intentionally non-federated so
 each service stands alone.
 
+## Running the router (Phase 2)
+
+The Rust router (`travelgraph-platform/router/`) is a Tokio + Axum binary that:
+
+1. Parses every inbound GraphQL document with `apollo-parser` (line/column-accurate errors).
+2. Runs structural validations: at-least-one-operation, no-anonymous-when-multiple,
+   and declared-variables-cover-all-references.
+3. Loads subgraph URLs and timeouts from `router/config/subgraphs.yaml`.
+
+Phase 3 layers Apollo Federation v2 on top (composed supergraph SDL, query planner, batched
+`_entities`). **This Phase 2 commit** introduces the router crate and wires it into Docker
+Compose; the container image ships a minimal `config/supergraph.graphql` placeholder so the
+process boots — wait until Phase 3 (`make compose`) before expecting cross-subgraph field
+plans against live subgraph SDLs.
+
+```bash
+make up-all          # postgres + redis + all 5 subgraphs + router
+make test-router     # /health + parse validation + minimal GraphQL smoke
+docker compose --profile subgraphs --profile router up   # raw Compose equivalent
+```
+
+Configuration is sourced from `router/config/subgraphs.yaml`. URLs support `${ENV:-default}`
+substitution so the same file works in Compose (service hostnames) and locally.
+
+| Service | Port  | Endpoint                          |
+| ------- | ----- | --------------------------------- |
+| router  | 8080  | http://localhost:8080/graphql     |
+
 ## Status
 
-Phases 0 and 1 — Foundation + Subgraph Services. See `Context.md` (project root) for the full
-MVP phase order and non-negotiables.
+Phase 0 — Foundation, Phase 1 — Subgraph Services, Phase 2 — Router Foundation.
+See `Context.md` (project root) for the full MVP phase order and non-negotiables.

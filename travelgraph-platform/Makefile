@@ -17,8 +17,16 @@ SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
 .DEFAULT_GOAL := help
 
-COMPOSE        ?= docker-compose
+# Detect Docker Compose CLI. Modern Docker Desktop ships the v2 plugin invoked as
+# `docker compose` (two words); older installs have the legacy `docker-compose` v1
+# binary. We prefer v2 when both exist. Override with `make COMPOSE=docker-compose`
+# (or any other invocation) if needed.
+COMPOSE ?= $(shell \
+    if docker compose version >/dev/null 2>&1; then echo "docker compose"; \
+    elif command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; \
+    else echo "docker compose"; fi)
 COMPOSE_ALL    := $(COMPOSE) --profile subgraphs
+COMPOSE_FULL   := $(COMPOSE) --profile subgraphs --profile router
 SCRIPTS_DIR    := scripts
 
 SUBGRAPHS := property-service pricing-service booking-service user-service review-service
@@ -49,33 +57,45 @@ up: ## Bring up postgres, redis, and all 5 subgraph services (subgraphs profile)
 up-infra: ## Bring up only postgres + redis (no subgraphs).
 	$(COMPOSE) up -d postgres redis
 
+.PHONY: up-all
+up-all: ## Bring up everything: postgres + redis + 5 subgraphs + router.
+	$(COMPOSE_FULL) up --build -d
+	@printf "\n$(GREEN)Full stack starting. Router will be at http://localhost:8080/graphql once subgraphs are healthy.$(NC)\n"
+
+.PHONY: up-router
+up-router: up-all ## Alias for up-all.
+
 .PHONY: down
 down: ## Stop and remove containers; volumes are preserved.
-	$(COMPOSE_ALL) down
+	$(COMPOSE_FULL) down
 
 .PHONY: down-volumes
 down-volumes: ## Stop containers AND remove the postgres data volume (destructive).
-	$(COMPOSE_ALL) down --volumes
+	$(COMPOSE_FULL) down --volumes
 
 .PHONY: ps
 ps: ## List service status.
-	$(COMPOSE_ALL) ps
+	$(COMPOSE_FULL) ps
 
 .PHONY: logs
 logs: ## Follow logs. Use `make logs SVC=property-service` to scope to one service.
 	@if [ -n "$(SVC)" ]; then \
-	  $(COMPOSE_ALL) logs -f $(SVC); \
+	  $(COMPOSE_FULL) logs -f $(SVC); \
 	else \
-	  $(COMPOSE_ALL) logs -f; \
+	  $(COMPOSE_FULL) logs -f; \
 	fi
 
 .PHONY: build
-build: ## Build all subgraph images without starting them.
-	$(COMPOSE_ALL) build
+build: ## Build all subgraph + router images without starting them.
+	$(COMPOSE_FULL) build
 
 .PHONY: test-subgraphs
 test-subgraphs: ## curl-based smoke test that hits every subgraph's /graphql endpoint.
 	@bash $(SCRIPTS_DIR)/smoke-test-subgraphs.sh
+
+.PHONY: test-router
+test-router: ## curl-based smoke test against the router (/health + parse validation).
+	@bash $(SCRIPTS_DIR)/smoke-test-router.sh
 
 # ----------------------------------------------------------------------------
 # Seed targets.

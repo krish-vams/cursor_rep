@@ -1,0 +1,28 @@
+# Phase 3.3: per-subgraph URL overrides + timeouts.
+#
+# Field-level routing is now derived from `supergraph.graphql` (Phase 3.2 composer
+# output); this file only holds runtime concerns the supergraph SDL cannot express:
+#
+#   * url        — the GraphQL endpoint URL the router should call. Overrides any URL
+#                  baked into the supergraph SDL by the composer (typically the dev URLs).
+#   * timeout_ms — per-call timeout in milliseconds (default 1000).
+#
+# Legacy `query_fields` / `mutation_fields` lists from Phase 2 are still accepted but
+# ignored.
+
+subgraphs:
+  property:
+    url: ${PROPERTY_SERVICE_URL:-http://property-service:8081/graphql}
+    timeout_ms: 1000
+  pricing:
+    url: ${PRICING_SERVICE_URL:-http://pricing-service:8082/graphql}
+    timeout_ms: 1000
+  booking:
+    url: ${BOOKING_SERVICE_URL:-http://booking-service:8083/graphql}
+    timeout_ms: 1500
+  user:
+    url: ${USER_SERVICE_URL:-http://user-service:8084/graphql}
+    timeout_ms: 1000
+  review:
+    url: ${REVIEW_SERVICE_URL:-http://review-service:8085/graphql}
+    timeout_ms: 1000
