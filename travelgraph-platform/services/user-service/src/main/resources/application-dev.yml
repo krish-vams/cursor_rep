@@ -1,0 +1,9 @@
+graphql:
+  graphiql:
+    enabled: true
+  introspection:
+    enabled: true
+
+logging:
+  level:
+    com.travelgraph: DEBUG

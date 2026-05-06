@@ -65,16 +65,28 @@ See `docs/` for shared conventions (e.g. `docs/graphql-conventions.md`).
 
 ## Running the subgraph services
 
-Phase 1 ships three subgraph services on the JVM. Each is a standalone Gradle (Kotlin DSL)
-project under `services/<name>-service/` with its own `Dockerfile` (multi-stage, distroless
-runtime). All three are wired into `docker-compose.yml` so the simplest path is:
+Phase 1 ships **all five** subgraph services on the JVM. Each is a standalone Gradle
+(Kotlin DSL) project under `services/<name>-service/` with its own `Dockerfile` (multi-stage,
+distroless runtime). All five are wired into `docker-compose.yml` behind a `subgraphs`
+profile, with a top-level `Makefile` for common operator workflows:
 
 ```bash
-# Bring up Postgres + Redis + all three subgraphs (builds images on first run).
-docker-compose up --build
+make up              # postgres + redis + all 5 subgraphs (subgraphs profile, --build)
+make up-infra        # postgres + redis only
+make down            # stop everything (preserves volumes)
+make logs            # follow logs from all services
+make logs SVC=property-service
+make seed            # verify all subgraph seed data is loaded
+make seed-reset      # destructive: drop volume and re-seed
+make test-subgraphs  # curl smoke test against every /graphql endpoint
+make ps              # service status
+```
 
-# Or just one service:
-docker-compose up property-service
+`make help` lists every target. The underlying Compose commands are:
+
+```bash
+docker-compose up postgres redis             # infra only
+docker-compose --profile subgraphs up        # everything
 ```
 
 | Service           | Port  | GraphQL endpoint                  | GraphiQL (dev only)                  |
@@ -82,6 +94,18 @@ docker-compose up property-service
 | property-service  | 8081  | http://localhost:8081/graphql     | http://localhost:8081/graphiql       |
 | pricing-service   | 8082  | http://localhost:8082/graphql     | http://localhost:8082/graphiql       |
 | booking-service   | 8083  | http://localhost:8083/graphql     | http://localhost:8083/graphiql       |
+| user-service      | 8084  | http://localhost:8084/graphql     | http://localhost:8084/graphiql       |
+| review-service    | 8085  | http://localhost:8085/graphql     | http://localhost:8085/graphiql       |
+
+`user-service` reads the caller's identity from the `x-user-id` request header
+(temporary stand-in for Phase 5 JWT auth). Pass it explicitly when calling `me`:
+
+```bash
+curl http://localhost:8084/graphql \
+  -H 'Content-Type: application/json' \
+  -H 'x-user-id: 33333333-3333-3333-3333-000000000001' \
+  -d '{"query":"{ me { id name loyaltyStatus } }"}'
+```
 
 Each service exposes Spring Actuator at `/actuator/health` and Prometheus metrics at
 `/actuator/prometheus`. GraphiQL and introspection are gated by `SPRING_PROFILES_ACTIVE=dev`
