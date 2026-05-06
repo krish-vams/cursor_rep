@@ -1,0 +1,25 @@
+# travelgraph supergraph composer configuration
+#
+# Each subgraph entry maps a stable name (used in the supergraph as the join graph name) to its
+# `/graphql` endpoint. The composer will POST `query { _service { sdl } }` to each URL, then
+# invoke the @apollo/composition Node script to compose the supergraph.
+#
+# Environment variables can be referenced as ${VAR:-default}.
+
+subgraphs:
+  - name: property
+    url: ${PROPERTY_SERVICE_URL:-http://localhost:8081/graphql}
+  - name: pricing
+    url: ${PRICING_SERVICE_URL:-http://localhost:8082/graphql}
+  - name: booking
+    url: ${BOOKING_SERVICE_URL:-http://localhost:8083/graphql}
+  - name: user
+    url: ${USER_SERVICE_URL:-http://localhost:8084/graphql}
+  - name: review
+    url: ${REVIEW_SERVICE_URL:-http://localhost:8085/graphql}
+
+# Where to write the composed supergraph SDL (relative to repo root or absolute).
+output: ../output/supergraph.graphql
+
+# Per-fetch HTTP timeout in milliseconds.
+fetchTimeoutMs: 5000

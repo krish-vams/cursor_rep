@@ -1,6 +1,8 @@
 package com.travelgraph.user.graphql
 
 import com.expediagroup.graphql.generator.annotations.GraphQLDescription
+import com.expediagroup.graphql.generator.federation.directives.FieldSet
+import com.expediagroup.graphql.generator.federation.directives.KeyDirective
 import com.travelgraph.user.domain.LoyaltyStatus
 import com.travelgraph.user.domain.UserEntity
 import java.util.UUID
@@ -30,6 +32,7 @@ enum class LoyaltyStatusGql {
     }
 }
 
+@KeyDirective(fields = FieldSet("id"))
 @GraphQLDescription("A registered guest of the TravelGraph platform.")
 data class User(
     @GraphQLDescription("Stable unique identifier of the user.")

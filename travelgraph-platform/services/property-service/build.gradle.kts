@@ -34,6 +34,7 @@ dependencies {
 
     // GraphQL (Expedia Group graphql-kotlin)
     implementation("com.expediagroup:graphql-kotlin-spring-server:${property("graphqlKotlinVersion")}")
+    implementation("com.expediagroup:graphql-kotlin-federation:${property("graphqlKotlinVersion")}")
 
     // Persistence
     implementation("org.flywaydb:flyway-core")

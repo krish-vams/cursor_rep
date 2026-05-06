@@ -1,9 +1,12 @@
 package com.travelgraph.property.graphql
 
 import com.expediagroup.graphql.generator.annotations.GraphQLDescription
+import com.expediagroup.graphql.generator.federation.directives.FieldSet
+import com.expediagroup.graphql.generator.federation.directives.KeyDirective
 import com.travelgraph.property.domain.PropertyEntity
 import java.util.UUID
 
+@KeyDirective(fields = FieldSet("id"))
 @GraphQLDescription("A travel property such as a hotel, vacation rental, or motel.")
 data class Property(
     @GraphQLDescription("Stable unique identifier for the property.")

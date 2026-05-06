@@ -94,8 +94,92 @@ test-subgraphs: ## curl-based smoke test that hits every subgraph's /graphql end
 	@bash $(SCRIPTS_DIR)/smoke-test-subgraphs.sh
 
 .PHONY: test-router
-test-router: ## curl-based smoke test against the router (/health + parse validation).
+test-router: ## curl-based smoke test against the router (/health + a federated query).
 	@bash $(SCRIPTS_DIR)/smoke-test-router.sh
+
+.PHONY: doctor
+doctor: ## Verify required local tooling (docker, node, curl) is on PATH.
+	@printf "$(GREEN)Checking local tooling...$(NC)\n"
+	@if ! command -v docker >/dev/null; then \
+	    printf "  $(YEL)docker not found$(NC) -- install Docker Desktop or the docker CLI\n"; exit 1; \
+	else printf "  docker:   %s\n" "$$(docker --version)"; fi
+	@if docker compose version >/dev/null 2>&1; then \
+	    printf "  compose:  %s (v2 plugin)\n" "$$(docker compose version --short 2>/dev/null)"; \
+	elif command -v docker-compose >/dev/null; then \
+	    printf "  compose:  %s (legacy v1)\n" "$$(docker-compose --version)"; \
+	else \
+	    printf "  $(YEL)Neither 'docker compose' (v2 plugin) nor 'docker-compose' (v1) is available.$(NC)\n"; \
+	    printf "  $(YEL)Install Docker Desktop, or 'brew install docker-compose' on macOS.$(NC)\n"; exit 1; \
+	fi
+	@if ! command -v node >/dev/null; then \
+	    printf "  $(YEL)node not found$(NC) -- composer needs Node 18+ (\`make compose\` will fail)\n"; \
+	else printf "  node:     %s\n" "$$(node --version)"; fi
+	@if ! command -v curl >/dev/null; then \
+	    printf "  $(YEL)curl not found$(NC) -- needed by smoke-test scripts and \`make boot\`\n"; \
+	else printf "  curl:     %s\n" "$$(curl --version | head -n1)"; fi
+	@printf "$(GREEN)Tooling looks good. Use 'make boot' to start the stack.$(NC)\n"
+
+.PHONY: boot
+boot: ## End-to-end Phase 3 bring-up: subgraphs -> wait healthy -> compose -> router.
+	@$(MAKE) -s doctor
+	@printf "$(GREEN)1/4 starting infra + subgraphs...$(NC)\n"
+	@$(MAKE) -s up
+	@printf "$(GREEN)2/4 waiting for subgraphs to become reachable...$(NC)\n"
+	@for port in 8081 8082 8083 8084 8085; do \
+	    for i in $$(seq 1 60); do \
+	        if curl --silent --output /dev/null --max-time 2 \
+	            --header 'Content-Type: application/json' \
+	            --data '{"query":"{ _service { sdl } }"}' \
+	            "http://localhost:$$port/graphql"; then \
+	            printf "  port %s ready\n" "$$port"; break; \
+	        fi; \
+	        sleep 1; \
+	        if [ "$$i" = "60" ]; then printf "$(YEL)  port %s not ready in 60s$(NC)\n" "$$port"; exit 1; fi; \
+	    done; \
+	done
+	@printf "$(GREEN)3/4 composing supergraph SDL...$(NC)\n"
+	@$(MAKE) -s compose
+	@printf "$(GREEN)4/4 starting router...$(NC)\n"
+	@$(MAKE) -s up-all
+	@printf "$(GREEN)Boot complete. Try: make test-router$(NC)\n"
+
+# ----------------------------------------------------------------------------
+# Phase 3.2 supergraph composition.
+# ----------------------------------------------------------------------------
+
+COMPOSER_DIR := schema-registry/composer
+SUPERGRAPH_OUTPUT := schema-registry/output/supergraph.graphql
+ROUTER_SUPERGRAPH := router/config/supergraph.graphql
+
+.PHONY: compose
+compose: ## Fetch SDLs from the running subgraphs and compose `supergraph.graphql`.
+	@printf "$(GREEN)Composing supergraph SDL...$(NC)\n"
+	@if ! command -v node >/dev/null; then \
+	    printf "$(YEL)Node 18+ is required for the composer (uses @apollo/composition).$(NC)\n"; exit 1; \
+	fi
+	@if [ ! -d "$(COMPOSER_DIR)/node_modules" ]; then \
+	    printf "$(YEL)Installing @apollo/composition (one-time)...$(NC)\n"; \
+	    cd $(COMPOSER_DIR) && npm install --omit=dev --no-audit --no-fund; \
+	fi
+	@cd $(COMPOSER_DIR) && gradle --no-daemon run --args="composer-config.yaml" -q
+	@cp $(SUPERGRAPH_OUTPUT) $(ROUTER_SUPERGRAPH)
+	@printf "$(GREEN)Wrote $(SUPERGRAPH_OUTPUT) and $(ROUTER_SUPERGRAPH)$(NC)\n"
+
+.PHONY: compose-docker
+compose-docker: ## Run the composer inside docker (requires `make up` for the subgraphs).
+	docker build -t travelgraph-composer $(COMPOSER_DIR)
+	docker run --rm \
+	    --network host \
+	    -e PROPERTY_SERVICE_URL=http://localhost:8081/graphql \
+	    -e PRICING_SERVICE_URL=http://localhost:8082/graphql \
+	    -e BOOKING_SERVICE_URL=http://localhost:8083/graphql \
+	    -e USER_SERVICE_URL=http://localhost:8084/graphql \
+	    -e REVIEW_SERVICE_URL=http://localhost:8085/graphql \
+	    -v "$(PWD)/$(COMPOSER_DIR)/composer-config.yaml:/opt/composer/composer-config.yaml" \
+	    -v "$(PWD)/schema-registry/output:/opt/composer/schema-registry/output" \
+	    travelgraph-composer
+	@cp $(SUPERGRAPH_OUTPUT) $(ROUTER_SUPERGRAPH)
+	@printf "$(GREEN)Composed via docker. Output written to $(ROUTER_SUPERGRAPH).$(NC)\n"
 
 # ----------------------------------------------------------------------------
 # Seed targets.

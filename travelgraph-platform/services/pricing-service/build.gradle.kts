@@ -31,6 +31,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
 
     implementation("com.expediagroup:graphql-kotlin-spring-server:${property("graphqlKotlinVersion")}")
+    implementation("com.expediagroup:graphql-kotlin-federation:${property("graphqlKotlinVersion")}")
 
     implementation("org.flywaydb:flyway-core")
     implementation("org.flywaydb:flyway-database-postgresql")

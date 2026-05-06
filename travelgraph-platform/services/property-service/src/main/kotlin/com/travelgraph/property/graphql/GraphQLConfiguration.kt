@@ -1,6 +1,14 @@
 package com.travelgraph.property.graphql
 
-import com.expediagroup.graphql.generator.hooks.SchemaGeneratorHooks
+import com.expediagroup.graphql.generator.SchemaGeneratorConfig
+import com.expediagroup.graphql.generator.TopLevelObject
+import com.expediagroup.graphql.generator.federation.FederatedSchemaGeneratorConfig
+import com.expediagroup.graphql.generator.federation.FederatedSchemaGeneratorHooks
+import com.expediagroup.graphql.generator.federation.execution.FederatedTypeResolver
+import com.expediagroup.graphql.generator.federation.toFederatedSchema
+import com.expediagroup.graphql.server.operations.Mutation
+import com.expediagroup.graphql.server.operations.Query
+import com.expediagroup.graphql.server.operations.Subscription
 import graphql.Scalars
 import graphql.schema.GraphQLSchema
 import graphql.schema.GraphQLType
@@ -17,12 +25,15 @@ import kotlin.reflect.KType
 /**
  * GraphQL configuration for property-service.
  *
- * Disables introspection unless `graphql.introspection.enabled=true` is set
- * (only true in the `dev` profile per `application-dev.yml`).
+ * Phase 3 wires graphql-kotlin federation: the generated schema includes `_service { sdl }` and
+ * `_entities(representations: [_Any!]!): [_Entity]!`, and the [Property] type carries a federation
+ * `@key(fields: "id")` directive. The Phase 2 hand-rolled router consumes that SDL via the new
+ * Phase 3.2 composer.
  *
- * Implementation note: graphql-kotlin auto-configures the `GraphQLSchema` bean.
- * We post-process that bean to layer a [BlockedFields] field visibility on top of
- * the existing code registry so `__schema` / `__type` queries are rejected.
+ * Introspection (`__schema`, `__type`, etc.) is still gated by `graphql.introspection.enabled`
+ * (true only in the `dev` profile). Federation queries (`_service`, `_entities`) are NOT
+ * introspection and remain available in every profile -- that is how the supergraph composer
+ * (Phase 3.2) and router planner (Phase 3.3) discover the schema.
  */
 @Configuration
 class GraphQLConfiguration(
@@ -33,18 +44,49 @@ class GraphQLConfiguration(
     private val log = LoggerFactory.getLogger(GraphQLConfiguration::class.java)
 
     /**
-     * Map Kotlin [UUID] to the GraphQL `ID` scalar so cross-service identifiers match the
-     * shared GraphQL conventions (`docs/graphql-conventions.md` rule TG-007 + TG-500). Without
-     * this hook graphql-kotlin generates a custom `UUID` scalar instead of `ID`.
+     * Federated schema generator config. Replaces the auto-configured non-federated config
+     * provided by `graphql-kotlin-spring-server`. We keep the `UUID` -> `ID` scalar mapping
+     * (rule TG-007 in `docs/graphql-conventions.md`) by composing our hook on top of the
+     * federated hooks.
      */
     @Bean
-    fun schemaGeneratorHooks(): SchemaGeneratorHooks = object : SchemaGeneratorHooks {
-        override fun willGenerateGraphQLType(type: KType): GraphQLType? = when (type.classifier) {
-            UUID::class -> Scalars.GraphQLID
-            else -> null
+    fun schemaConfig(resolvers: List<FederatedTypeResolver>): SchemaGeneratorConfig {
+        val hooks = object : FederatedSchemaGeneratorHooks(resolvers, optInFederationV2 = true) {
+            override fun willGenerateGraphQLType(type: KType): GraphQLType? = when (type.classifier) {
+                UUID::class -> Scalars.GraphQLID
+                else -> super.willGenerateGraphQLType(type)
+            }
         }
+        return FederatedSchemaGeneratorConfig(
+            supportedPackages = listOf("com.travelgraph.property"),
+            hooks = hooks,
+        )
     }
 
+    /**
+     * Override the auto-configured `schema` bean to call [toFederatedSchema] instead of the
+     * default non-federated `toSchema`. This is what wires `_service` / `_entities` into
+     * generation.
+     */
+    @Bean
+    fun schema(
+        config: SchemaGeneratorConfig,
+        queries: List<Query>,
+        mutations: List<Mutation>,
+        subscriptions: List<Subscription>,
+    ): GraphQLSchema {
+        val q = queries.map { TopLevelObject(it) }
+        val m = mutations.map { TopLevelObject(it) }
+        val s = subscriptions.map { TopLevelObject(it) }
+        return toFederatedSchema(config as FederatedSchemaGeneratorConfig, q, m, s)
+    }
+
+    /**
+     * After the schema bean is created, layer a [BlockedFields] visibility on top so that
+     * `__schema` / `__type` queries are rejected when introspection is disabled. We
+     * deliberately do NOT block `_service` or `_entities` -- those are the federation
+     * contract surface and must always be reachable.
+     */
     @Bean
     fun introspectionGuard(): BeanPostProcessor = object : BeanPostProcessor {
         override fun postProcessAfterInitialization(bean: Any, beanName: String): Any? {

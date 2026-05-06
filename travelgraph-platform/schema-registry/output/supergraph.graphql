@@ -1,0 +1,34 @@
+# PLACEHOLDER supergraph SDL.
+#
+# This file is committed so that docker-compose's bind-mount target exists when
+# the stack is first cloned. It is REPLACED by the real composed SDL the moment
+# you run `make compose` (Phase 3.2 composer output).
+#
+# A router started against this file will boot successfully but every incoming
+# query will fail with FIELD_NOT_OWNED because no subgraphs / types are
+# declared. That is intentional: it surfaces "you forgot to compose" as a
+# loud, recoverable error instead of a silent crash loop.
+
+schema
+  @link(url: "https://specs.apollo.dev/link/v1.0")
+  @link(url: "https://specs.apollo.dev/join/v0.3", for: EXECUTION)
+{
+  query: Query
+}
+
+directive @join__field(graph: join__Graph!, requires: join__FieldSet, provides: join__FieldSet, type: String, external: Boolean, override: String, usedOverridden: Boolean) repeatable on FIELD_DEFINITION | INPUT_FIELD_DEFINITION
+directive @join__graph(name: String!, url: String!) on ENUM_VALUE
+directive @join__type(graph: join__Graph!, key: join__FieldSet, extension: Boolean! = false, resolvable: Boolean! = true, isInterfaceObject: Boolean! = false) repeatable on OBJECT | INTERFACE | UNION | ENUM | INPUT_OBJECT | SCALAR
+directive @link(url: String, as: String, for: link__Purpose, import: [link__Import]) repeatable on SCHEMA
+
+scalar join__FieldSet
+scalar link__Import
+enum link__Purpose { SECURITY EXECUTION }
+
+enum join__Graph {
+  PLACEHOLDER @join__graph(name: "placeholder", url: "http://placeholder/graphql")
+}
+
+type Query @join__type(graph: PLACEHOLDER) {
+  _placeholder: String @join__field(graph: PLACEHOLDER)
+}

@@ -162,6 +162,7 @@ services:
     environment:
       ROUTER_PORT: 8080
       ROUTER_SUBGRAPH_CONFIG: /app/config/subgraphs.yaml
+      ROUTER_SUPERGRAPH_PATH: /app/config/supergraph.graphql
       RUST_LOG: ${RUST_LOG:-info}
       ROUTER_LOG_FORMAT: ${ROUTER_LOG_FORMAT:-json}
       PROPERTY_SERVICE_URL: http://property-service:8081/graphql
@@ -169,6 +170,11 @@ services:
       BOOKING_SERVICE_URL:  http://booking-service:8083/graphql
       USER_SERVICE_URL:     http://user-service:8084/graphql
       REVIEW_SERVICE_URL:   http://review-service:8085/graphql
+    # Phase 3.3: bind-mount the composer's output so `make compose` updates the router
+    # without rebuilding its image. The router fails to boot if this file does not
+    # exist, so the workflow is: `make up` -> `make compose` -> `make up-all`.
+    volumes:
+      - ./schema-registry/output/supergraph.graphql:/app/config/supergraph.graphql:ro
     ports:
       - "8080:8080"
 

@@ -1,6 +1,14 @@
 package com.travelgraph.user.graphql
 
-import com.expediagroup.graphql.generator.hooks.SchemaGeneratorHooks
+import com.expediagroup.graphql.generator.SchemaGeneratorConfig
+import com.expediagroup.graphql.generator.TopLevelObject
+import com.expediagroup.graphql.generator.federation.FederatedSchemaGeneratorConfig
+import com.expediagroup.graphql.generator.federation.FederatedSchemaGeneratorHooks
+import com.expediagroup.graphql.generator.federation.execution.FederatedTypeResolver
+import com.expediagroup.graphql.generator.federation.toFederatedSchema
+import com.expediagroup.graphql.server.operations.Mutation
+import com.expediagroup.graphql.server.operations.Query
+import com.expediagroup.graphql.server.operations.Subscription
 import graphql.Scalars
 import graphql.schema.GraphQLSchema
 import graphql.schema.GraphQLType
@@ -23,11 +31,30 @@ class GraphQLConfiguration(
     private val log = LoggerFactory.getLogger(GraphQLConfiguration::class.java)
 
     @Bean
-    fun schemaGeneratorHooks(): SchemaGeneratorHooks = object : SchemaGeneratorHooks {
-        override fun willGenerateGraphQLType(type: KType): GraphQLType? = when (type.classifier) {
-            UUID::class -> Scalars.GraphQLID
-            else -> null
+    fun schemaConfig(resolvers: List<FederatedTypeResolver>): SchemaGeneratorConfig {
+        val hooks = object : FederatedSchemaGeneratorHooks(resolvers, optInFederationV2 = true) {
+            override fun willGenerateGraphQLType(type: KType): GraphQLType? = when (type.classifier) {
+                UUID::class -> Scalars.GraphQLID
+                else -> super.willGenerateGraphQLType(type)
+            }
         }
+        return FederatedSchemaGeneratorConfig(
+            supportedPackages = listOf("com.travelgraph.user"),
+            hooks = hooks,
+        )
+    }
+
+    @Bean
+    fun schema(
+        config: SchemaGeneratorConfig,
+        queries: List<Query>,
+        mutations: List<Mutation>,
+        subscriptions: List<Subscription>,
+    ): GraphQLSchema {
+        val q = queries.map { TopLevelObject(it) }
+        val m = mutations.map { TopLevelObject(it) }
+        val s = subscriptions.map { TopLevelObject(it) }
+        return toFederatedSchema(config as FederatedSchemaGeneratorConfig, q, m, s)
     }
 
     @Bean

@@ -1,0 +1,15 @@
+# Repo-root ignores. Each subproject has its own .gitignore for language-specific
+# artifacts; this one only catches things that land at the workspace root.
+
+# Rustup / cargo bootstrap dirs that the official installer drops into $PWD when
+# run from a non-default directory. They're huge (~700 MB) and personal-machine
+# only — never commit them.
+.cargo-tmp/
+.rustup-tmp/
+
+# OS / editor noise.
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.swo

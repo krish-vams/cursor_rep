@@ -1,6 +1,8 @@
 package com.travelgraph.booking.graphql
 
 import com.expediagroup.graphql.generator.annotations.GraphQLDescription
+import com.expediagroup.graphql.generator.federation.directives.FieldSet
+import com.expediagroup.graphql.generator.federation.directives.KeyDirective
 import com.travelgraph.booking.domain.BookingEntity
 import com.travelgraph.booking.domain.BookingStatus
 import java.math.BigDecimal
@@ -28,6 +30,7 @@ enum class BookingStatusGql {
     }
 }
 
+@KeyDirective(fields = FieldSet("id"))
 @GraphQLDescription("A reservation made by a user against a property for a date range.")
 data class Booking(
     @GraphQLDescription("Stable unique identifier of the booking.")
